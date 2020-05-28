@@ -6,8 +6,8 @@ CFLAGS=-g -Wall
 
 all: $(TARGETS)
 serial: serial.o uds-channel.o serial-channel.o
-uds-server-go: uds-server.go
-	go build -o $@ $<
+uds-server-go: uds-server.go request-response-handling.go
+	go build -o $@ $^
 
 clean: 
 	rm -f $(TARGETS) *.o

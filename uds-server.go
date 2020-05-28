@@ -9,7 +9,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strings"
 )
 
 type udsMessage struct {
@@ -128,23 +127,6 @@ func read_uds_message(c net.Conn) udsMessage {
 
 	//log.Printf("msg read: %v\n", msg)
 	return msg
-}
-
-func interpreter(c net.Conn) {
-	if strings.Index(string(received), "Password:") != -1 {
-        received = []byte{}
-		switch {
-		case strings.Index(string(last_msg.payload), username) != -1:
-			write_uds_message(c, password)
-		default:
-			write_uds_message(c, "exit\n")
-		}
-	} else if strings.Index(string(received), "login:") != -1 {
-        received = []byte{}
-		write_uds_message(c, username)
-	} else {
-		log.Printf("interpreter error: nothing useful found: %q", string(received))
-	}
 }
 
 func reader(c net.Conn) {
