@@ -19,8 +19,8 @@ type udsMessage struct {
 }
 
 const (
-	username = "pi"
-	password = "raspberry"
+	username = "pi\n"
+	password = "raspberry\n"
 
 	uds_file_path = "/tmp/ASDF"
 )
@@ -143,11 +143,8 @@ func interpreter(c net.Conn) {
         received = []byte{}
 		write_uds_message(c, username)
 	} else {
-        received = []byte{}
-		log.Printf("interpreter error: nothing useful found: %v", string(received))
+		log.Printf("interpreter error: nothing useful found: %q", string(received))
 	}
-
-	last_msg = empty_uds_message
 }
 
 func reader(c net.Conn) {
