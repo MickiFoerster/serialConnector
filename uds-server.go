@@ -33,11 +33,11 @@ var (
 	username string
 	password string
 
-	last_msg          udsMessage
 	empty_uds_message = udsMessage{
 		typ: undefined,
 		len: 0,
 	}
+	request = []byte{}
 	received = []byte{}
 )
 
@@ -66,6 +66,9 @@ func main() {
 	flag.StringVar(&username, "username", "pi\n", "username for login")
 	flag.StringVar(&password, "password", "raspberry\n", "password for login")
 	flag.Parse()
+    log.Printf("username: %v\n", username)
+    log.Printf("password: %v\n", password)
+    fill_reactions()
 
 	l, err := net.Listen("unix", uds_file_path)
 	if err != nil {
@@ -206,7 +209,7 @@ func write_uds_message(c net.Conn, cmd string) {
 	}
 
 	// store request for reference reasons for interpreter
-	last_msg = msg
+	request = msg.payload
 
 	// user output
 	fmt.Print("->")
