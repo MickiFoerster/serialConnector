@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
   init(argc, argv);
   for (;;) {
     struct timeval tv = {
-        .tv_sec = 10,
+        .tv_sec = 30,
         .tv_usec = 0,
     };
 

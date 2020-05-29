@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -18,9 +19,6 @@ type udsMessage struct {
 }
 
 const (
-	username = "pi\n"
-	password = "raspberry\n"
-
 	uds_file_path = "/tmp/ASDF"
 )
 
@@ -32,6 +30,9 @@ const (
 )
 
 var (
+	username string
+	password string
+
 	last_msg          udsMessage
 	empty_uds_message = udsMessage{
 		typ: undefined,
@@ -61,6 +62,10 @@ func main() {
 		log.Printf("file %s has been deleted\n", uds_file_path)
 		os.Exit(0)
 	}()
+
+	flag.StringVar(&username, "username", "pi\n", "username for login")
+	flag.StringVar(&password, "password", "raspberry\n", "password for login")
+	flag.Parse()
 
 	l, err := net.Listen("unix", uds_file_path)
 	if err != nil {
