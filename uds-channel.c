@@ -99,21 +99,6 @@ static void uds_write_channel(udsMessageType typ, const char *str) {
       .len = strlen(str),
       .payload = (unsigned char *)str,
   };
-  char prefix[8];
-  switch (typ) {
-  case udsmsg_serial2host:
-    snprintf(prefix, sizeof prefix, "<-");
-    break;
-  case udsmsg_host2serial:
-    snprintf(prefix, sizeof prefix, "->");
-    break;
-  case udsmsg_info:
-    snprintf(prefix, sizeof prefix, "info: ");
-    break;
-  default:
-    assert(0 && "not expected type of UDS message");
-    break;
-  }
   ssize_t towrite = sizeof msg.typ + sizeof msg.len + msg.len;
   unsigned char *buf = malloc(sizeof(unsigned char) * towrite);
   assert(buf);

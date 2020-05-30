@@ -8,6 +8,7 @@ typedef enum {
   udsmsg_serial2host,
   udsmsg_host2serial,
   udsmsg_info,
+  udsmsg_control,
 } udsMessageType;
 
 typedef struct {

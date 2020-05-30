@@ -22,7 +22,7 @@ func fill_reactions() {
             req: "*",
             res: "Last login: ",
             reaction: func(req, res string, c net.Conn) {
-                write_uds_message(c, "date\n")
+                write_uds_message(c, udsmsg_host2serial, "date\n")
             },
         },
         reaction{
@@ -33,7 +33,7 @@ func fill_reactions() {
                 if u[len(u)-1] != '\n' {
                     u += "\n"
                 }
-                write_uds_message(c, u)
+                write_uds_message(c, udsmsg_host2serial, u)
             },
         },
         reaction{
@@ -44,14 +44,14 @@ func fill_reactions() {
                 if p[len(p)-1] != '\n' {
                     p += "\n"
                 }
-                write_uds_message(c, p)
+                write_uds_message(c, udsmsg_host2serial, p)
             },
         },
         reaction{
             req: "*",
             res: "Password: ",
             reaction: func(req, res string, c net.Conn) {
-                write_uds_message(c, "exit\n")
+                write_uds_message(c, udsmsg_host2serial, "exit\n")
             },
         },
         reaction{
@@ -66,7 +66,7 @@ func fill_reactions() {
             req: "*",
             res: ":~$ ",
             reaction: func(req, res string, c net.Conn) {
-                write_uds_message(c, "echo hello ; sleep 5\n")
+                write_uds_message(c, udsmsg_host2serial, "echo hello ; sleep 5\n")
             },
         },
     }
