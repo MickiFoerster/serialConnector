@@ -233,6 +233,7 @@ func reader(c net.Conn) chan struct{} {
                 log.Fatal(fmt.Sprintf("error: not expected message: %v", msg))
             }
         }
+        write_uds_message(c, udsmsg_control, "")
         c.Close()
         log.Printf("connection closed\n")
         if sigterm_recvd {
@@ -254,27 +255,27 @@ func write_uds_message(c net.Conn, typ int, cmd string) {
 	// write type
 	err := binary.Write(buf, binary.LittleEndian, msg.typ)
 	if err != nil {
-		log.Fatal("error: could not write type: %v", err)
+		log.Fatalf("error: could not write type: %v\n", err)
 	}
 	n, err := buf.WriteTo(c)
 	if err != nil || n != 1 {
-		log.Fatal("error: could not write to socket: %v", err)
+		log.Fatalf("error: could not write to socket: %v\n", err)
 	}
 
 	// write length
 	err = binary.Write(buf, binary.LittleEndian, msg.len)
 	if err != nil {
-		log.Fatal("error: could not write length: %v", err)
+		log.Fatalf("error: could not write length: %v\n", err)
 	}
 	n, err = buf.WriteTo(c)
 	if err != nil || n != 4 {
-		log.Fatal("error: could not write to socket: %v", err)
+		log.Fatalf("error: could not write to socket: %v\n", err)
 	}
 
 	// write payload
 	m, err := c.Write(msg.payload)
 	if err != nil || uint32(m) != msg.len {
-		log.Fatal("error: could not write to socket: %v", err)
+		log.Fatalf("error: could not write to socket: %v\n", err)
 	}
 
 	// store request for reference reasons for interpreter
