@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"syscall"
 )
 
 type udsMessage struct {
@@ -38,10 +39,10 @@ var (
 		typ: undefined,
 		len: 0,
 	}
-	request = []byte{}
+	request  = []byte{}
 	received = []byte{}
 
-    terminate_signal = make(chan struct{})
+	terminate_signal = make(chan struct{})
 )
 
 func init() {
@@ -49,13 +50,17 @@ func init() {
 }
 
 func handleClient(c net.Conn) chan struct{} {
-    ch := reader(c)
+	ch := reader(c)
 
 	// initial starting communication by sending a request to see how target
 	// will response
-	write_uds_message(c, udsmsg_host2serial, "exit\n")
+    err := write_uds_message(c, udsmsg_host2serial, "exit\n")
+    if err != nil {
+        log.Printf("error while sending command 'exit' to client: %v\n", err)
+        c.Close()
+    }
 
-    return ch
+	return ch
 }
 
 func main() {
@@ -69,183 +74,181 @@ func main() {
 	flag.StringVar(&username, "username", "pi\n", "username for login")
 	flag.StringVar(&password, "password", "raspberry\n", "password for login")
 	flag.Parse()
-    log.Printf("username: %v\n", username)
-    log.Printf("password: %v\n", password)
-    fill_reactions()
+	log.Printf("username: %v\n", username)
+	log.Printf("password: %v\n", password)
+	fill_reactions()
 
-    serverdone := server()
+	serverdone := server()
 
-    // wait for SIGINT
-    <-terminate_signal
+	// wait for SIGINT
+	<-terminate_signal
 
-    // stop server
-    log.Println("send server to stop ...")
-    serverdone<-struct{}{}
-    log.Println("wait for server to stop ...")
-    <-serverdone
-    log.Println("terminating main")
+	// stop server
+	log.Println("send server to stop ...")
+	serverdone <- struct{}{}
+	log.Println("wait for server to stop ...")
+	<-serverdone
+	log.Println("terminating main")
 }
-
 
 func server() chan struct{} {
-    serverdone := make(chan struct{})
-    listener := make(chan net.Conn)
+	serverdone := make(chan struct{})
+	listener := make(chan net.Conn)
 
-    go func() { // listener routine
-        l, err := net.Listen("unix", uds_file_path)
-        if err != nil {
-            log.Fatal("listen failed:", err)
-        }
-        log.Println("Listener created successfully")
-        defer os.Remove(uds_file_path)
+	go func() { // listener routine
+		l, err := net.Listen("unix", uds_file_path)
+		if err != nil {
+			log.Fatal("listen failed:", err)
+		}
+		log.Println("Listener created successfully")
+		defer os.Remove(uds_file_path)
 
-        for {
-            c, err := l.Accept()
-            if err != nil {
-                log.Fatal("accept() failed:", err)
-            }
-            listener<-c
-        }
-    }()
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				log.Fatal("accept() failed:", err)
+			}
+			listener <- c
+		}
+	}()
 
-    go func() { // event loop
-        clients := []chan struct{}{}
-        serverloop:
-        for {
-            select {
-            case <-serverdone:
-                log.Println("terminate signal received, so exit server")
-                break serverloop
-            case client:=<-listener:
-                chan2client := handleClient(client)
-                clients = append(clients, chan2client)
-            }
-        }
-        log.Println("signal clients to terminate")
-        for i, chan2client := range(clients) {
-            log.Printf("signal client %v to terminate", i)
-            chan2client<-struct{}{}
-            log.Println("wait for client to complete shutdown")
-            <-chan2client
-        }
-        log.Println("server signals back that shutdown is complete")
-        serverdone<-struct{}{}
-    }()
+	go func() { // event loop
+		clients := []chan struct{}{}
+	serverloop:
+		for {
+			select {
+			case <-serverdone:
+				log.Println("terminate signal received, so exit server")
+				break serverloop
+			case client := <-listener:
+				chan2client := handleClient(client)
+				clients = append(clients, chan2client)
+			}
+		}
+		log.Println("signal clients to terminate")
+		for i, chan2client := range clients {
+			log.Printf("signal client %v to terminate", i)
+			chan2client <- struct{}{}
+			log.Println("wait for client to complete shutdown")
+			<-chan2client
+		}
+		log.Println("server signals back that shutdown is complete")
+		serverdone <- struct{}{}
+	}()
 
-    return serverdone
+	return serverdone
 }
 
-func read_uds_message_error(err error, c net.Conn) udsMessage {
-	if err != io.EOF {
-		log.Fatalf("error while reading from client: %s\n", err)
+func read_uds_message_error(err error) udsMessage {
+	switch err {
+	case syscall.EPIPE:
+		log.Printf("BROKEN PIPE occurred\n")
+	case io.EOF:
+		log.Printf("client closed the connection\n")
+	default:
 	}
-	return empty_uds_message
+    return empty_uds_message
 }
 
 func read_uds_message(c net.Conn) udsMessage {
 	var msg udsMessage
 	buf := make([]byte, 1)
-	n, err := c.Read(buf)
+	_, err := c.Read(buf)
 	if err != nil {
-		return read_uds_message_error(err, c)
-	}
-	if n != 1 {
-		log.Fatal("not expected number of bytes read: wanted %d, read %d", len(buf), n)
+		return read_uds_message_error(err)
 	}
 	reader := bytes.NewReader(buf)
 	err = binary.Read(reader, binary.LittleEndian, &msg.typ)
 	if err != nil {
-		log.Fatal("error while writing message type: %v\n", err)
+		return read_uds_message_error(err)
 	}
 
 	buf = make([]byte, 4)
-	n, err = c.Read(buf)
+	_, err = c.Read(buf)
 	if err != nil {
-		return read_uds_message_error(err, c)
-	}
-	if n != len(buf) {
-		log.Fatal("not expected number of bytes read: wanted %d, read %d", len(buf), n)
+		return read_uds_message_error(err)
 	}
 	reader = bytes.NewReader(buf)
 	err = binary.Read(reader, binary.LittleEndian, &msg.len)
 	if err != nil {
-		log.Fatal("error while writing message type: %v\n", err)
+		return read_uds_message_error(err)
 	}
 
 	msg.payload = make([]byte, msg.len)
-	n, err = c.Read(msg.payload)
+	_, err = c.Read(msg.payload)
 	if err != nil {
-		return read_uds_message_error(err, c)
+		return read_uds_message_error(err)
 	}
-	if n != len(msg.payload) {
-		log.Fatal("not expected number of bytes read: wanted %d, read %d", len(msg.payload), n)
-	}
-
-	//log.Printf("msg read: %v\n", msg)
 	return msg
 }
 
 func reader(c net.Conn) chan struct{} {
-    ch := make(chan struct{})
+	sigterm_chan := make(chan struct{})
+	eventloop_reader_chan := make(chan udsMessage)
     go func() {
-        sigterm_recvd := false
-        loop:
+		sigterm_recvd := false
+        eventloop:
         for {
             select {
-            case <-ch:
+            case <-sigterm_chan:
                 log.Println("terminate signal received, so exit reader")
                 sigterm_recvd = true
-                break loop
-            default:
+                break eventloop
+            case msg := <-eventloop_reader_chan:
                 log.Println("no terminate signal received, so continue")
-            }
-            msg := read_uds_message(c)
-            switch msg.typ {
-            case undefined:
-                log.Println("reader stops due to reading error")
-                break loop
-            case udsmsg_serial2host:
-                fmt.Print("<-")
-                for i := uint32(0); i < msg.len; i++ {
-                    switch msg.payload[i] {
-                    case '\t':
-                        fmt.Printf("\\t")
-                    case '\r':
-                        fmt.Printf("\\r")
-                    case '\n':
-                        fmt.Printf("\\n")
-                    default:
-                        fmt.Printf("%c", msg.payload[i])
+                switch msg.typ {
+                case undefined:
+                    log.Println("reader stops due to reading error")
+                    break eventloop
+                case udsmsg_serial2host:
+                    fmt.Print("<-")
+                    for i := uint32(0); i < msg.len; i++ {
+                        switch msg.payload[i] {
+                        case '\t':
+                            fmt.Printf("\\t")
+                        case '\r':
+                            fmt.Printf("\\r")
+                        case '\n':
+                            fmt.Printf("\\n")
+                        default:
+                            fmt.Printf("%c", msg.payload[i])
+                        }
                     }
-                }
-                fmt.Printf("\n")
-                // hand over message to response interpreter
-                received = append(received, msg.payload...)
-                interpreter(c)
+                    fmt.Printf("\n")
+                    // hand over message to response interpreter
+                    received = append(received, msg.payload...)
+                    interpreter(c)
 
-            case udsmsg_host2serial:
-                log.Fatal("not expected type host2serial")
-            case udsmsg_info:
-                fmt.Printf("info: %s\n", string(msg.payload))
-            case udsmsg_control:
-                fmt.Printf("control: %s\n", string(msg.payload))
-            default:
-                log.Fatal(fmt.Sprintf("error: not expected message: %v", msg))
+                case udsmsg_host2serial:
+                    log.Fatal("not expected type host2serial")
+                case udsmsg_info:
+                    fmt.Printf("info: %s\n", string(msg.payload))
+                case udsmsg_control:
+                    fmt.Printf("control: %s\n", string(msg.payload))
+                default:
+                    log.Fatal(fmt.Sprintf("error: not expected message: %v", msg))
+                }
             }
         }
-        write_uds_message(c, udsmsg_control, "")
-        c.Close()
-        log.Printf("connection closed\n")
-        if sigterm_recvd {
-            log.Printf("signal back to server that client connection has been closed\n")
-            ch<-struct{}{}
-        }
+        _ = write_uds_message(c, udsmsg_control, "")
+		c.Close()
+		log.Printf("connection closed\n")
+		if sigterm_recvd {
+			log.Printf("signal back to server that client connection has been closed\n")
+			sigterm_chan <- struct{}{}
+		}
     }()
 
-    return ch
+	go func() {
+		for {
+            eventloop_reader_chan<-read_uds_message(c)
+		}
+	}()
+
+	return sigterm_chan
 }
 
-func write_uds_message(c net.Conn, typ int, cmd string) {
+func write_uds_message(c net.Conn, typ int, cmd string) error {
 	msg := udsMessage{
 		typ:     uint8(typ),
 		len:     uint32(len(cmd)),
@@ -255,27 +258,27 @@ func write_uds_message(c net.Conn, typ int, cmd string) {
 	// write type
 	err := binary.Write(buf, binary.LittleEndian, msg.typ)
 	if err != nil {
-		log.Fatalf("error: could not write type: %v\n", err)
+        return err
 	}
-	n, err := buf.WriteTo(c)
-	if err != nil || n != 1 {
-		log.Fatalf("error: could not write to socket: %v\n", err)
+	_, err = buf.WriteTo(c)
+	if err != nil {
+        return err
 	}
 
 	// write length
 	err = binary.Write(buf, binary.LittleEndian, msg.len)
 	if err != nil {
-		log.Fatalf("error: could not write length: %v\n", err)
+        return err
 	}
-	n, err = buf.WriteTo(c)
-	if err != nil || n != 4 {
-		log.Fatalf("error: could not write to socket: %v\n", err)
+	_, err = buf.WriteTo(c)
+	if err != nil {
+        return err
 	}
 
 	// write payload
-	m, err := c.Write(msg.payload)
-	if err != nil || uint32(m) != msg.len {
-		log.Fatalf("error: could not write to socket: %v\n", err)
+	_, err = c.Write(msg.payload)
+	if err != nil {
+        return err
 	}
 
 	// store request for reference reasons for interpreter
@@ -296,4 +299,6 @@ func write_uds_message(c net.Conn, typ int, cmd string) {
 		}
 	}
 	fmt.Printf("\n")
+
+    return nil
 }

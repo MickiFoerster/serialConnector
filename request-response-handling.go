@@ -22,7 +22,11 @@ func fill_reactions() {
             req: "*",
             res: "Last login: ",
             reaction: func(req, res string, c net.Conn) {
-                write_uds_message(c, udsmsg_host2serial, "date\n")
+                err := write_uds_message(c, udsmsg_host2serial, "date\n")
+                if err != nil {
+                    log.Printf("error while sending command 'date' to client: %v\n", err)
+                    c.Close()
+                }
             },
         },
         reaction{
@@ -33,7 +37,11 @@ func fill_reactions() {
                 if u[len(u)-1] != '\n' {
                     u += "\n"
                 }
-                write_uds_message(c, udsmsg_host2serial, u)
+                err := write_uds_message(c, udsmsg_host2serial, u)
+                if err != nil {
+                    log.Printf("error while sending command username to client: %v\n", err)
+                    c.Close()
+                }
             },
         },
         reaction{
@@ -44,14 +52,22 @@ func fill_reactions() {
                 if p[len(p)-1] != '\n' {
                     p += "\n"
                 }
-                write_uds_message(c, udsmsg_host2serial, p)
+                err := write_uds_message(c, udsmsg_host2serial, p)
+                if err != nil {
+                    log.Printf("error while sending command password to client: %v\n", err)
+                    c.Close()
+                }
             },
         },
         reaction{
             req: "*",
             res: "Password: ",
             reaction: func(req, res string, c net.Conn) {
-                write_uds_message(c, udsmsg_host2serial, "exit\n")
+                err := write_uds_message(c, udsmsg_host2serial, "exit\n")
+                if err != nil {
+                    log.Printf("error while sending command 'exit' to client: %v\n", err)
+                    c.Close()
+                }
             },
         },
         reaction{
@@ -66,7 +82,11 @@ func fill_reactions() {
             req: "*",
             res: ":~$ ",
             reaction: func(req, res string, c net.Conn) {
-                write_uds_message(c, udsmsg_host2serial, "echo hello ; sleep 5\n")
+                err := write_uds_message(c, udsmsg_host2serial, "echo hello ; sleep 5\n")
+                if err != nil {
+                    log.Printf("error while sending command to client: %v\n", err)
+                    c.Close()
+                }
             },
         },
     }
