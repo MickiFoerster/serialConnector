@@ -9,8 +9,12 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"syscall"
+	"text/template"
+
+	"github.com/fatih/color"
 )
 
 type udsMessage struct {
@@ -44,10 +48,18 @@ var (
 	received = []byte{}
 
 	terminate_signal = make(chan struct{})
+
+	template_serial_channel_c *template.Template
+	template_uds_channel_c    *template.Template
+	template_serial_c         *template.Template
 )
 
 func init() {
 	os.Remove(uds_file_path)
+
+	template_serial_channel_c = template.Must(template.ParseFiles("templates/serial-channel.gotmpl"))
+	template_uds_channel_c = template.Must(template.ParseFiles("templates/uds_channel_c.gotmpl"))
+	template_serial_c = template.Must(template.ParseFiles("templates/serial_c.gotmpl"))
 }
 
 func handleClient(c net.Conn) chan struct{} {
@@ -80,6 +92,7 @@ func main() {
 	fill_reactions()
 
 	serverdone := server()
+	client()
 
 	// wait for SIGINT
 	<-terminate_signal
@@ -319,4 +332,54 @@ func close_uds_channel(c net.Conn) {
 		return
 	}
 	log.Println("UDS connection closed successfully")
+}
+
+func client() {
+	fn := "serial.c"
+	f, err := os.Create(fn)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = template_serial_c.Execute(f, nil)
+	f.Close()
+	cfiles := []string{fn}
+
+	fn = "serial-channel.c"
+	f, err = os.Create(fn)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = template_serial_channel_c.Execute(f, nil)
+	f.Close()
+	cfiles = append(cfiles, fn)
+
+	fn = "uds-channel.c"
+	f, err = os.Create(fn)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = template_uds_channel_c.Execute(f, nil)
+	f.Close()
+	cfiles = append(cfiles, fn)
+
+	for _, cfile := range cfiles {
+		compiler := "gcc"
+		args := []string{"-c", "-std=c11", "-ggdb3", "-Wall", "-Werror", cfile}
+		s := fmt.Sprint(compiler)
+		for _, arg := range args {
+			s += fmt.Sprintf(" %s", arg)
+		}
+		s += fmt.Sprint(": ")
+
+		cmd := exec.Command(compiler, args...)
+		err := cmd.Run()
+		if err != nil {
+			fmt.Printf("%-40s", s)
+			color.Red(" %10s ", "[failed]")
+			fmt.Println(err)
+		} else {
+			fmt.Printf("%-40s", s)
+			color.Green(" %10s ", "[OK]")
+		}
+	}
 }
