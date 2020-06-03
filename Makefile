@@ -1,15 +1,11 @@
-TARGETS=serial uds-server-go
-CFLAGS=-g -Wall
-
-%.o : %.c %.h Makefile
-	$(CC) $(CFLAGS) -c -o $@ $<
+TARGETS=uds-server-go
 
 all: $(TARGETS)
-serial: serial.o uds-channel.o serial-channel.o
+
 uds-server-go: uds-server.go request-response-handling.go
 	go build -o $@ $^
 
 clean: 
-	rm -f $(TARGETS) *.o
+	rm -f $(TARGETS) *.o *.c *.h
 
 .PHONY: clean all
