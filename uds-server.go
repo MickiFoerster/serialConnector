@@ -11,10 +11,9 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"text/template"
-
-	"github.com/fatih/color"
 )
 
 type udsMessage struct {
@@ -84,7 +83,10 @@ func main() {
 	fill_reactions()
 
 	serverdone := server()
-	client()
+	err := client()
+	if err != nil {
+		log.Fatalf("error: client build/execution failed: %v\n", err)
+	}
 
 	// wait for SIGINT
 	<-terminate_signal
@@ -315,18 +317,18 @@ func write_uds_message(c net.Conn, typ int, cmd string) error {
 func close_uds_channel(c net.Conn) {
 	err := write_uds_message(c, udsmsg_control, "")
 	if err != nil {
-		log.Println("signal child process to terminate failed: %v", err)
+		log.Printf("signal child process to terminate failed: %v", err)
 	}
 	log.Println("closing UDS connection ...")
 	err = c.Close()
 	if err != nil {
-		log.Println("closing of UDS connection failed: %v", err)
+		log.Printf("closing of UDS connection failed: %v", err)
 		return
 	}
 	log.Println("UDS connection closed successfully")
 }
 
-func client() {
+func client() error {
 	type generatedFile struct {
 		templateFilename string
 		sourceFilename   string
@@ -365,39 +367,47 @@ func client() {
 		}: true,
 	}
 
+	compiler := "gcc"
+	obj_files := []string{}
 	for k, _ := range srcfiles {
 		tpl := template.Must(template.ParseFiles(k.templateFilename))
 		fn := k.sourceFilename
 		f, err := os.Create(fn)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 		err = tpl.Execute(f, nil)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 		f.Close()
 
 		if k.compileAble {
-			compiler := "gcc"
 			args := []string{"-c", "-std=c11", "-ggdb3", "-Wall", "-Werror", k.sourceFilename}
-			s := fmt.Sprint(compiler)
-			for _, arg := range args {
-				s += fmt.Sprintf(" %s", arg)
-			}
-			s += fmt.Sprint(": ")
-
 			cmd := exec.Command(compiler, args...)
 			err := cmd.Run()
 			if err != nil {
-				fmt.Printf("%-40s", s)
-				color.Red(" %10s ", "[failed]")
-				fmt.Println(err)
-			} else {
-				fmt.Printf("%-40s", s)
-				color.Green(" %10s ", "[OK]")
+				return err
 			}
+			obj_files = append(obj_files, strings.ReplaceAll(k.sourceFilename, ".c", ".o"))
 		}
 	}
+	args := []string{"-o", "serial"}
+	args = append(args, obj_files...)
+	cmd := exec.Command(compiler, args...)
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
 
+	cmd = exec.Command("./serial")
+	err = cmd.Start()
+	if err != nil {
+		return err
+	}
+	go func() {
+		err := cmd.Wait()
+		log.Printf("child process ./serial finished with error: %v\n", err)
+	}()
+	return nil
 }
