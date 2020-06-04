@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
                     // write payload to serial channel
                     ssize_t n = serialChannel.Write(msg.payload, msg.len);
                     assert(n > 0);
-
+#if 0
                     fprintf(stderr, "->");
                     for (int i = 0; i < msg.len; ++i) {
                       switch (msg.payload[i]) {
@@ -110,6 +110,7 @@ int main(int argc, char* argv[]) {
                       }
                     }
                     fprintf(stderr, "\n");
+#endif
                     break;
                   }
                   default:
@@ -135,6 +136,7 @@ int main(int argc, char* argv[]) {
           default:
             buf[n] = '\0';
             udsChannel.Write(udsmsg_serial2host, (char *)buf);
+#if 0
             // dump message to console
             fprintf(stderr, "<-");
             for (int i = 0; i < n; ++i) {
@@ -153,6 +155,7 @@ int main(int argc, char* argv[]) {
               }
             }
             fprintf(stderr, "\n");
+#endif
             break;
           }
         }

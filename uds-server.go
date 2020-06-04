@@ -428,7 +428,10 @@ func client() (chan struct{}, error) {
 	done := make(chan struct{})
 	go func() {
 		err := cmd.Wait()
-		log.Printf("child process ./serial finished with error: %v\n", err)
+		if err != nil {
+			log.Printf("child process ./serial finished with error: %v\n", err)
+			return
+		}
 		<-stdout_copied
 		<-stderr_copied
 		done <- struct{}{}
