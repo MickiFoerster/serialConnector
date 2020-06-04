@@ -6,8 +6,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include "config.h"
 #include "serial-channel.h"
@@ -15,19 +17,37 @@
 
 const char default_portname[] = "/dev/ttyUSB0";
 
+void signal_handler(int sig) {
+  fprintf(stderr, "SIGNAL %d caught\n", sig);
+  switch (sig) {
+    case SIGINT:
+      fprintf(stderr, "SIGINT received\n");
+      break;
+  }
+}
+
 static void init(int argc, char *argv[]) {
+  sigset_t sigset;
+  sigemptyset(&sigset);
+  sigaddset(&sigset, SIGINT);
+  if(sigprocmask(SIG_BLOCK, &sigset, NULL) < 0 ) {
+      error_message("error: could not block SIGINT: %s\n", strerror(errno));
+      exit(EXIT_FAILURE);
+  }
+  fprintf(stderr, "signal handler SIGINT is now blocked\n");
+
   const char *p = default_portname;
   if (argc > 1 && strstr(argv[1], "/dev/") != NULL) {
     p = argv[1];
   }
   if (!serialChannel.Open(p)) {
     error_message("error: could not create serial communication channel\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   if (!udsChannel.Open()) {
     error_message("error: could not create UDS communication channel\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 }
 
@@ -50,11 +70,11 @@ int main(int argc, char* argv[]) {
     switch (active_socks) {
     case 0:  // timeout
       fprintf(stderr, "error: select() returned with timeout\n");
-      exit(1);
+      exit(EXIT_FAILURE);
       break;
     case -1: // error
       fprintf(stderr, "error: select() failed: %s\n", strerror(errno));
-      exit(1);
+      exit(EXIT_FAILURE);
       break;
     default: // number of sockets is rc
       for (int i = 0; i < active_socks; ++i) {
@@ -106,7 +126,7 @@ int main(int argc, char* argv[]) {
           switch (n) {
           case -1:
             error_message("error: read() failed: %s\n", strerror(errno));
-            exit(1);
+            exit(EXIT_FAILURE);
             break;
           case 0:
             error_message("read() received zero/EOF\n");

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -83,7 +84,7 @@ func main() {
 	fill_reactions()
 
 	serverdone := server()
-	err := client()
+	client_done, err := client()
 	if err != nil {
 		log.Fatalf("error: client build/execution failed: %v\n", err)
 	}
@@ -96,6 +97,8 @@ func main() {
 	serverdone <- struct{}{}
 	log.Println("wait for server to stop ...")
 	<-serverdone
+
+	<-client_done
 	log.Println("terminating main")
 }
 
@@ -328,68 +331,69 @@ func close_uds_channel(c net.Conn) {
 	log.Println("UDS connection closed successfully")
 }
 
-func client() error {
+func client() (chan struct{}, error) {
 	type generatedFile struct {
 		templateFilename string
-		sourceFilename   string
 		compileAble      bool
 	}
-	srcfiles := map[generatedFile]bool{
-		generatedFile{
+	srcfiles := map[string]generatedFile{
+		"config.h": generatedFile{
 			templateFilename: "templates/config_h.gotmpl",
-			sourceFilename:   "config.h",
 			compileAble:      false,
-		}: true,
-		generatedFile{
+		},
+		"serial-channel.h": generatedFile{
 			templateFilename: "templates/serial-channel_h.gotmpl",
-			sourceFilename:   "serial-channel.h",
 			compileAble:      false,
-		}: true,
-		generatedFile{
+		},
+		"uds-channel.h": generatedFile{
 			templateFilename: "templates/uds-channel_h.gotmpl",
-			sourceFilename:   "uds-channel.h",
 			compileAble:      false,
-		}: true,
-		generatedFile{
+		},
+		"serial-channel.c": generatedFile{
 			templateFilename: "templates/serial-channel.gotmpl",
-			sourceFilename:   "serial-channel.c",
 			compileAble:      true,
-		}: true,
-		generatedFile{
+		},
+		"uds-channel.c": generatedFile{
 			templateFilename: "templates/uds_channel_c.gotmpl",
-			sourceFilename:   "uds-channel.c",
 			compileAble:      true,
-		}: true,
-		generatedFile{
+		},
+		"serial.c": generatedFile{
 			templateFilename: "templates/serial_c.gotmpl",
-			sourceFilename:   "serial.c",
 			compileAble:      true,
-		}: true,
+		},
 	}
 
 	compiler := "gcc"
 	obj_files := []string{}
-	for k, _ := range srcfiles {
+	for _, genfile := range []string{
+		"config.h",
+		"serial-channel.h",
+		"uds-channel.h",
+		"serial-channel.c",
+		"uds-channel.c",
+		"serial.c",
+	} {
+		k := srcfiles[genfile]
 		tpl := template.Must(template.ParseFiles(k.templateFilename))
-		fn := k.sourceFilename
+		fn := genfile
 		f, err := os.Create(fn)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		err = tpl.Execute(f, nil)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		f.Close()
 
 		if k.compileAble {
-			args := []string{"-c", "-std=c11", "-ggdb3", "-Wall", "-Werror", k.sourceFilename}
+			args := []string{"-I.", "-c", "-ggdb3", "-Wall", "-Werror", genfile}
 			cmd := exec.Command(compiler, args...)
 			err := cmd.Run()
 			if err != nil {
-				return err
+				return nil, errors.New(fmt.Sprintf("error while executing %v: %v", cmd, err))
 			}
-			obj_files = append(obj_files, strings.ReplaceAll(k.sourceFilename, ".c", ".o"))
+			obj_files = append(obj_files, strings.ReplaceAll(genfile, ".c", ".o"))
 		}
 	}
 	args := []string{"-o", "serial"}
@@ -397,17 +401,40 @@ func client() error {
 	cmd := exec.Command(compiler, args...)
 	err := cmd.Run()
 	if err != nil {
-		return err
+		return nil, errors.New(fmt.Sprintf("error while executing %v: %v", cmd, err))
 	}
 
 	cmd = exec.Command("./serial")
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("error: could not take stderr from child command: %v\n", err))
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("error: could not take stdout from child command: %v\n", err))
+	}
+	stdout_copied := make(chan struct{})
+	stderr_copied := make(chan struct{})
+	go func() {
+		io.Copy(os.Stdout, stdout)
+		stdout_copied <- struct{}{}
+	}()
+	go func() {
+		io.Copy(os.Stderr, stderr)
+		stderr_copied <- struct{}{}
+	}()
 	err = cmd.Start()
 	if err != nil {
-		return err
+		return nil, errors.New(fmt.Sprintf("error while executing %v: %v", cmd, err))
 	}
+
+	done := make(chan struct{})
 	go func() {
 		err := cmd.Wait()
 		log.Printf("child process ./serial finished with error: %v\n", err)
+		<-stdout_copied
+		<-stderr_copied
+		done <- struct{}{}
 	}()
-	return nil
+	return done, nil
 }

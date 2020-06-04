@@ -170,4 +170,5 @@ static void uds_close_channel(void) {
     break; // exit loop
   }
   fprintf(stderr, "info: UDS channel closed\n");
+  fflush(stderr);
 }
