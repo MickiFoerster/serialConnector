@@ -207,7 +207,6 @@ func reader(c net.Conn) chan struct{} {
 				sigterm_recvd = true
 				break eventloop
 			case msg := <-eventloop_reader_chan:
-				log.Printf("UDS message received: %v\n", msg)
 				switch msg.typ {
 				case undefined:
 					log.Println("reader stops due to reading error")
@@ -253,9 +252,7 @@ func reader(c net.Conn) chan struct{} {
 
 	go func() {
 		for {
-			log.Println("enter read_uds_message")
 			eventloop_reader_chan <- read_uds_message(c)
-			log.Println("back from read_uds_message")
 		}
 	}()
 
