@@ -86,7 +86,7 @@ func main() {
 
 	flag.StringVar(&username, "username", "pi", "username for login")
 	flag.StringVar(&password, "password", "raspberry", "password for login")
-	flag.StringVar(&device, "device", "/dev/ttyS0", "device for serial connection")
+	flag.StringVar(&device, "device", "/dev/ttyUSB0", "device for serial connection")
 	flag.Parse()
 	log.Printf("username: %v\n", username)
 	log.Printf("password: %v\n", password)
@@ -108,6 +108,7 @@ func main() {
 	<-serverdone
 
 	<-client_done
+	os.Remove("serial")
 	log.Println("terminating main")
 }
 

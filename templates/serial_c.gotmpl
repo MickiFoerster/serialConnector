@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
                   {
                     // write payload to serial channel
                     ssize_t n = serialChannel.Write(msg.payload, msg.len);
-                    assert(n > 0);
+                    assert(n > 0 && "write n>0 bytes to serial channel");
 #if 0
                     fprintf(stderr, "->");
                     for (int i = 0; i < msg.len; ++i) {
