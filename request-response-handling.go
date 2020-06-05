@@ -25,7 +25,7 @@ func fill_reactions() {
 				err := write_uds_message(c, udsmsg_host2serial, "date\n")
 				if err != nil {
 					log.Printf("error while sending command 'date' to client: %v\n", err)
-					c.Close()
+					close_uds_channel(c)
 				}
 			},
 		},
@@ -40,7 +40,7 @@ func fill_reactions() {
 				err := write_uds_message(c, udsmsg_host2serial, u)
 				if err != nil {
 					log.Printf("error while sending command username to client: %v\n", err)
-					c.Close()
+					close_uds_channel(c)
 				}
 			},
 		},
@@ -55,7 +55,7 @@ func fill_reactions() {
 				err := write_uds_message(c, udsmsg_host2serial, p)
 				if err != nil {
 					log.Printf("error while sending command password to client: %v\n", err)
-					c.Close()
+					close_uds_channel(c)
 				}
 			},
 		},
@@ -66,7 +66,7 @@ func fill_reactions() {
 				err := write_uds_message(c, udsmsg_host2serial, "exit\n")
 				if err != nil {
 					log.Printf("error while sending command 'exit' to client: %v\n", err)
-					c.Close()
+					close_uds_channel(c)
 				}
 			},
 		},
@@ -75,7 +75,11 @@ func fill_reactions() {
 			res: "Login incorrect",
 			reaction: func(req, res string, c net.Conn) {
 				log.Println("error: Cannot login with provided username/password")
-				c.Close()
+				err := write_uds_message(c, udsmsg_control, "")
+				if err != nil {
+					log.Printf("error while sending command to client: %v\n", err)
+					close_uds_channel(c)
+				}
 			},
 		},
 		reaction{
@@ -85,7 +89,7 @@ func fill_reactions() {
 				err := write_uds_message(c, udsmsg_host2serial, "echo hello ; sleep 5\n")
 				if err != nil {
 					log.Printf("error while sending command to client: %v\n", err)
-					c.Close()
+					close_uds_channel(c)
 				}
 			},
 		},

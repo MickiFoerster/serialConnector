@@ -15,7 +15,7 @@
 #include "serial-channel.h"
 #include "uds-channel.h"
 
-const char default_portname[] = "/dev/ttyUSB0";
+const char default_portname[] = "{{.DefaultPortname}}";
 
 void signal_handler(int sig) {
   fprintf(stderr, "SIGNAL %d caught\n", sig);

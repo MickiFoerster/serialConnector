@@ -39,6 +39,7 @@ var (
 	clients  = map[chan struct{}]bool{}
 	username string
 	password string
+	device   string
 
 	empty_uds_message = udsMessage{
 		typ: undefined,
@@ -72,12 +73,20 @@ func main() {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt)
 	go func() {
-		<-ch
-		terminate_signal <- struct{}{}
+		caught := 0
+		for {
+			<-ch
+			caught += 1
+			if caught > 1 {
+				log.Fatalf("SIGINT received already twice, so exit the hard way\n")
+			}
+			terminate_signal <- struct{}{}
+		}
 	}()
 
 	flag.StringVar(&username, "username", "pi", "username for login")
 	flag.StringVar(&password, "password", "raspberry", "password for login")
+	flag.StringVar(&device, "device", "/dev/ttyS0", "device for serial connection")
 	flag.Parse()
 	log.Printf("username: %v\n", username)
 	log.Printf("password: %v\n", password)
@@ -209,7 +218,7 @@ func reader(c net.Conn) chan struct{} {
 			case msg := <-eventloop_reader_chan:
 				switch msg.typ {
 				case undefined:
-					log.Println("reader stops due to reading error")
+					log.Println("reader stops due to reading undefined message. Connection seems to be closed.")
 					break eventloop
 				case udsmsg_serial2host:
 					fmt.Print("<-")
@@ -329,8 +338,12 @@ func close_uds_channel(c net.Conn) {
 }
 
 func client() (chan struct{}, error) {
+	type templateArguments struct {
+		DefaultPortname string
+	}
 	type generatedFile struct {
 		templateFilename string
+		templateArgs     templateArguments
 		compileAble      bool
 	}
 	srcfiles := map[string]generatedFile{
@@ -356,7 +369,10 @@ func client() (chan struct{}, error) {
 		},
 		"serial.c": generatedFile{
 			templateFilename: "templates/serial_c.gotmpl",
-			compileAble:      true,
+			templateArgs: templateArguments{
+				DefaultPortname: device,
+			},
+			compileAble: true,
 		},
 	}
 
@@ -377,7 +393,7 @@ func client() (chan struct{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		err = tpl.Execute(f, nil)
+		err = tpl.Execute(f, k.templateArgs)
 		if err != nil {
 			return nil, err
 		}
@@ -429,8 +445,7 @@ func client() (chan struct{}, error) {
 	go func() {
 		err := cmd.Wait()
 		if err != nil {
-			log.Printf("child process ./serial finished with error: %v\n", err)
-			return
+			log.Fatalf("child process ./serial finished with error: %v\n", err)
 		}
 		<-stdout_copied
 		<-stderr_copied
