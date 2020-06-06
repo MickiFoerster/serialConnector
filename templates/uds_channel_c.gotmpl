@@ -11,7 +11,7 @@
 #include "config.h"
 #include "uds-channel.h"
 
-#define UNIX_DOMAIN_SOCKET_PATH "/tmp/ASDF" // note max size of UNIX_PATH_MAX
+#define UNIX_DOMAIN_SOCKET_PATH "{{.UdsPathName}}" // note max size of UNIX_PATH_MAX
 
 static bool uds_open_channel(void);
 static void uds_close_channel(void);

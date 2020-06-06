@@ -24,7 +24,8 @@ type udsMessage struct {
 }
 
 const (
-	uds_file_path = "/tmp/ASDF"
+	uds_file_path               = "/tmp/uds-server.uds"
+	serial_device_config_string = "100:0:1cb2:0:3:1c:7f:15:4:5:0:0:11:13:1a:0:12:f:17:16:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0"
 )
 
 const (
@@ -91,6 +92,16 @@ func main() {
 	log.Printf("username: %v\n", username)
 	log.Printf("password: %v\n", password)
 	fill_reactions()
+
+	// init serial device
+	cmd := exec.Command("stty",
+		fmt.Sprintf("--file=%s", device),
+		serial_device_config_string)
+	err := cmd.Run()
+	if err != nil {
+		log.Fatalf("error while configuring tty device %v: %v\n", device, err)
+	}
+	log.Printf("serial device %v was configured with tty successfully\n", device)
 
 	serverdone := server()
 	client_done, err := client()
@@ -340,7 +351,8 @@ func close_uds_channel(c net.Conn) {
 
 func client() (chan struct{}, error) {
 	type templateArguments struct {
-		DefaultPortname string
+		Devicename  string
+		UdsPathName string
 	}
 	type generatedFile struct {
 		templateFilename string
@@ -362,16 +374,25 @@ func client() (chan struct{}, error) {
 		},
 		"serial-channel.c": generatedFile{
 			templateFilename: "templates/serial-channel.gotmpl",
-			compileAble:      true,
+			templateArgs: templateArguments{
+				Devicename:  device,
+				UdsPathName: uds_file_path,
+			},
+			compileAble: true,
 		},
 		"uds-channel.c": generatedFile{
 			templateFilename: "templates/uds_channel_c.gotmpl",
-			compileAble:      true,
+			templateArgs: templateArguments{
+				Devicename:  device,
+				UdsPathName: uds_file_path,
+			},
+			compileAble: true,
 		},
 		"serial.c": generatedFile{
 			templateFilename: "templates/serial_c.gotmpl",
 			templateArgs: templateArguments{
-				DefaultPortname: device,
+				Devicename:  device,
+				UdsPathName: uds_file_path,
 			},
 			compileAble: true,
 		},
@@ -416,6 +437,22 @@ func client() (chan struct{}, error) {
 	err := cmd.Run()
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("error while executing %v: %v", cmd, err))
+	}
+
+	// remove generated files
+	for _, genfile := range []string{
+		"config.h",
+		"serial-channel.h",
+		"uds-channel.h",
+		"serial-channel.c",
+		"uds-channel.c",
+		"serial.c",
+	} {
+		os.Remove(genfile)
+		if strings.HasSuffix(genfile, ".c") {
+			objf := genfile[:len(genfile)-2] + ".o"
+			os.Remove(objf)
+		}
 	}
 
 	cmd = exec.Command("./serial")
