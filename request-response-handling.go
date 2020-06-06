@@ -25,17 +25,18 @@ var commands = []string{
 
 func fill_reactions() {
 	reactions = []reaction{
-		reaction{
-			req: "*",
-			res: "Last login: ",
-			reaction: func(req, res string, c net.Conn) {
-				err := write_uds_message(c, udsmsg_host2serial, "date\n")
-				if err != nil {
-					log.Printf("error while sending command 'date' to client: %v\n", err)
-					close_uds_channel(c)
-				}
-			},
-		},
+		/*
+			reaction{
+				req: "*",
+				res: "Last login: ",
+				reaction: func(req, res string, c net.Conn) {
+					err := write_uds_message(c, udsmsg_host2serial, "date\n")
+					if err != nil {
+						log.Printf("error while sending command 'date' to client: %v\n", err)
+						close_uds_channel(c)
+					}
+				},
+			},*/
 		reaction{
 			req: "*",
 			res: " login: ",
@@ -90,9 +91,35 @@ func fill_reactions() {
 			},
 		},
 		reaction{
-			req: "*",
+			req: password,
 			res: "~$ ",
 			reaction: func(req, res string, c net.Conn) {
+				if len(commands) > 0 {
+					cmd := commands[0]
+					if cmd[len(cmd)-1] != '\n' {
+						cmd += "\n"
+					}
+					err := write_uds_message(c, udsmsg_host2serial, cmd)
+					if err != nil {
+						log.Printf("error while sending command %q to client: %v\n", cmd, err)
+						close_uds_channel(c)
+					}
+				} else {
+					cmd := "exit\n"
+					err := write_uds_message(c, udsmsg_host2serial, cmd)
+					if err != nil {
+						log.Printf("error while sending command %q to client: %v\n", cmd, err)
+						close_uds_channel(c)
+					}
+					close_uds_channel(c)
+				}
+			},
+		},
+		reaction{
+			req: "~$ " + commands[0],
+			res: "~$ ",
+			reaction: func(req, res string, c net.Conn) {
+				commands = commands[1:]
 				if len(commands) > 0 {
 					cmd := commands[0]
 					commands = commands[1:]
@@ -105,6 +132,12 @@ func fill_reactions() {
 						close_uds_channel(c)
 					}
 				} else {
+					cmd := "exit\n"
+					err := write_uds_message(c, udsmsg_host2serial, cmd)
+					if err != nil {
+						log.Printf("error while sending command %q to client: %v\n", cmd, err)
+						close_uds_channel(c)
+					}
 					close_uds_channel(c)
 				}
 			},
@@ -120,10 +153,12 @@ func interpreter(c net.Conn) {
 		}
 		if req != "*" &&
 			strings.Index(string(request), req) == -1 {
+			log.Printf("request %v not found in %v\n", req, string(request))
 			continue
 		}
 
 		if strings.Index(string(received), r.res) == -1 {
+			log.Printf("%v not found in %v\n", r.res, string(received))
 			continue
 		}
 

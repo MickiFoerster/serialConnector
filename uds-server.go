@@ -338,7 +338,7 @@ func write_uds_message(c net.Conn, typ int, cmd string) error {
 func close_uds_channel(c net.Conn) {
 	err := write_uds_message(c, udsmsg_control, "")
 	if err != nil {
-		log.Printf("signal child process to terminate failed: %v", err)
+		log.Fatalf("signal child process to terminate failed: %v", err)
 	}
 	log.Println("closing UDS connection ...")
 	err = c.Close()
