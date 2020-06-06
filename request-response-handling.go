@@ -16,6 +16,13 @@ type reaction struct {
 
 var reactions = []reaction{}
 
+var commands = []string{
+	"hostname",
+	"id",
+	"sudo apt update",
+	"sudo apt upgrade -y",
+}
+
 func fill_reactions() {
 	reactions = []reaction{
 		reaction{
@@ -86,9 +93,18 @@ func fill_reactions() {
 			req: "*",
 			res: "~$ ",
 			reaction: func(req, res string, c net.Conn) {
-				err := write_uds_message(c, udsmsg_host2serial, "echo hello ; sleep 5\n")
-				if err != nil {
-					log.Printf("error while sending command to client: %v\n", err)
+				if len(commands) > 0 {
+					cmd := commands[0]
+					commands = commands[1:]
+					if cmd[len(cmd)-1] != '\n' {
+						cmd += "\n"
+					}
+					err := write_uds_message(c, udsmsg_host2serial, cmd)
+					if err != nil {
+						log.Printf("error while sending command %q to client: %v\n", cmd, err)
+						close_uds_channel(c)
+					}
+				} else {
 					close_uds_channel(c)
 				}
 			},
