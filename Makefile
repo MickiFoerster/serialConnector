@@ -3,9 +3,9 @@ TEMPLATES=$(shell find templates -name "*.gotmpl")
 
 all: $(TARGETS)
 
-uds-server.go: $(TEMPLATES)
+client.go: $(TEMPLATES)
 	touch $@
-uds-server-go: uds-server.go request-response-handling.go
+uds-server-go: uds-server.go request-response-handling.go server.go client.go
 	go build -o $@ $^
 
 clean: 

@@ -56,17 +56,14 @@ int main(int argc, char* argv[]) {
 
   init(argc, argv);
   for (;;) {
-    struct timeval tv = {
-        .tv_sec = 30,
-        .tv_usec = 0,
-    };
+    //struct timeval tv = { .tv_sec = 30, .tv_usec = 0, };
 
     FD_ZERO(&fds);
     FD_SET(udsChannel.sock, &fds);
     FD_SET(serialChannel.sock, &fds);
     int max = (serialChannel.sock < udsChannel.sock) ? udsChannel.sock
                                                      : serialChannel.sock;
-    int active_socks = select(max + 1, &fds, NULL, NULL, &tv);
+    int active_socks = select(max + 1, &fds, NULL, NULL, NULL);
     switch (active_socks) {
     case 0:  // timeout
       fprintf(stderr, "error: select() returned with timeout\n");

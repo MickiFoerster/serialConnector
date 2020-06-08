@@ -11,7 +11,7 @@ import (
 	"text/template"
 )
 
-func client() (chan struct{}, error) {
+func client(client_sync chan struct{}) (chan struct{}, error) {
 	type templateArguments struct {
 		Devicename  string
 		UdsPathName string
@@ -117,6 +117,9 @@ func client() (chan struct{}, error) {
 		}
 	}
 
+	// wait for server to create passive socket
+	log.Println("client: wait for server to start Accept ...")
+	<-client_sync
 	cmd = exec.Command("./serial")
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
@@ -143,6 +146,7 @@ func client() (chan struct{}, error) {
 
 	done := make(chan struct{})
 	go func() {
+		defer os.Remove("./serial")
 		err := cmd.Wait()
 		if err != nil {
 			log.Fatalf("child process ./serial finished with error: %v\n", err)

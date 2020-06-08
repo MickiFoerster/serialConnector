@@ -80,22 +80,35 @@ func main() {
 	}
 	log.Printf("serial device %v was configured with tty successfully\n", device)
 
-	server_done := server()
-	client_done, err := client()
+	client_sync := make(chan struct{})
+	server_done, err := server(client_sync)
+	if err != nil {
+		log.Fatalf("error: server could not be started: %v\n", err)
+	}
+	client_done, err := client(client_sync)
 	if err != nil {
 		log.Fatalf("error: client build/execution failed: %v\n", err)
 	}
 
-	// wait for SIGINT
-	<-terminate_signal
+	alldone := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-terminate_signal:
+				log.Println("send server to stop ...")
+				server_done <- struct{}{}
+			case <-server_done:
+				log.Println("server shutdown is complete")
+				alldone <- struct{}{}
+			case <-client_done:
+				log.Println("client shutdown is complete")
+				alldone <- struct{}{}
+			}
+		}
+	}()
 
-	// stop server
-	log.Println("send server to stop ...")
-	server_done <- struct{}{}
-	log.Println("wait for server to stop ...")
-	<-server_done
-
-	<-client_done
-	os.Remove("serial")
+	for i := 0; i < 2; i++ {
+		<-alldone
+	}
 	log.Println("terminating main")
 }
