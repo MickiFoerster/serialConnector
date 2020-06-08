@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"time"
 )
 
 type udsMessage struct {
@@ -45,6 +46,10 @@ var (
 
 func init() {
 	os.Remove(uds_file_path)
+	start = State{
+		name:         "undefined",
+		entranceTime: time.Now(),
+	}
 }
 
 func main() {

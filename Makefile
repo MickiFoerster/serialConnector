@@ -5,7 +5,11 @@ all: $(TARGETS)
 
 client.go: $(TEMPLATES)
 	touch $@
-uds-server-go: uds-server.go request-response-handling.go server.go client.go
+uds-server-go: uds-server.go \
+	           request-response-handling.go \
+			   server.go \
+			   client.go \
+			   state.go
 	go build -o $@ $^
 
 clean: 

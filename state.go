@@ -16,3 +16,11 @@ type transition struct {
 	to         State
 	conditions []Condition
 }
+
+var (
+	start        State
+	currentstate *State = &start
+	loggedoff           = State{
+		name: "loggedoff",
+	}
+)
