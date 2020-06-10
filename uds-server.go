@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"time"
 )
 
 type udsMessage struct {
@@ -46,10 +45,7 @@ var (
 
 func init() {
 	os.Remove(uds_file_path)
-	start = State{
-		name:         "undefined",
-		entranceTime: time.Now(),
-	}
+	start_statemachine()
 }
 
 func main() {
@@ -73,7 +69,6 @@ func main() {
 	flag.Parse()
 	log.Printf("username: %v\n", username)
 	log.Printf("password: %v\n", password)
-	fill_reactions()
 
 	// init serial device
 	cmd := exec.Command("stty",

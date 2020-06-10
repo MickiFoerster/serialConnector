@@ -94,7 +94,7 @@ func process_received_uds_msg(msg udsMessage, c net.Conn) error {
 		fmt.Printf("\n")
 		// hand over message to response interpreter
 		received = append(received, msg.payload...)
-		interpreter(c)
+		HereFillContentToCurrentState(c)
 
 	case udsmsg_host2serial:
 		log.Fatal("not expected type host2serial")
