@@ -37,8 +37,6 @@ var (
 		typ: undefined,
 		len: 0,
 	}
-	request  = []byte{}
-	received = []byte{}
 
 	terminate_signal = make(chan struct{})
 )

@@ -92,9 +92,7 @@ func process_received_uds_msg(msg udsMessage, c net.Conn) error {
 			}
 		}
 		fmt.Printf("\n")
-		// hand over message to response interpreter
-		received = append(received, msg.payload...)
-		HereFillContentToCurrentState(c)
+		updateCurrentStateRecv(msg)
 
 	case udsmsg_host2serial:
 		log.Fatal("not expected type host2serial")
@@ -156,7 +154,7 @@ func write_uds_message(c net.Conn, typ int, cmd string) error {
 	}
 
 	// store request for reference reasons for interpreter
-	request = msg.payload
+	updateCurrentStateSent(msg)
 
 	// user output
 	fmt.Print("->")

@@ -9,8 +9,10 @@ import (
 type State struct {
 	name         string
 	entranceTime time.Time
-	sent         string
-	received     string
+	sent         []byte
+	received     []byte
+	enterHook    func(interface{})
+	exitHook     func(interface{})
 }
 
 type condition func(from *State, to *State) bool
@@ -68,4 +70,10 @@ func start_statemachine() {
 			}
 		}
 	}()
+}
+
+func updateCurrentStateRecv(msg udsMessage) {
+}
+
+func updateCurrentStateSent(msg udsMessage) {
 }
