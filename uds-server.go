@@ -39,6 +39,7 @@ var (
 	}
 
 	terminate_signal = make(chan struct{})
+	writerinput      = make(chan udsMessage)
 )
 
 func init() {

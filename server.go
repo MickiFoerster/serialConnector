@@ -31,6 +31,8 @@ func server(client_sync chan struct{}) (chan struct{}, error) {
 		}
 
 		reader(server_done, c)
+		go writer(c)
+
 		// initial starting communication by sending a request to see how target
 		// will response
 		err = write_uds_message(c, udsmsg_host2serial, "exit\n")
@@ -40,6 +42,13 @@ func server(client_sync chan struct{}) (chan struct{}, error) {
 	}()
 
 	return server_done, nil
+}
+
+func writer(c net.Conn) {
+	for {
+		msg := <-writerinput
+		write_uds_message(c, msg.typ, string(msg.payload))
+	}
 }
 
 func reader(server_done chan struct{}, c net.Conn) {
@@ -120,7 +129,7 @@ func close_uds_channel(c net.Conn) {
 	log.Println("UDS connection closed successfully")
 }
 
-func write_uds_message(c net.Conn, typ int, cmd string) error {
+func write_uds_message(c net.Conn, typ uint8, cmd string) error {
 	msg := udsMessage{
 		typ:     uint8(typ),
 		len:     uint32(len(cmd)),
