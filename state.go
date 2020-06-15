@@ -48,6 +48,15 @@ var (
 		name: "loggedin",
 		enterHook: func() {
 			fmt.Println("enterHook of 'loggedin' called")
+		},
+		exitHook: func() {
+			fmt.Println("exitHook of 'loggedin' called")
+		},
+	}
+	prompt = State{
+		name: "prompt",
+		enterHook: func() {
+			fmt.Println("enterHook of 'prompt' called")
 			cmd := `hostname
             id
             sudo apt update 
@@ -61,9 +70,10 @@ var (
 			}
 		},
 		exitHook: func() {
-			fmt.Println("exitHook of 'loggedin' called")
+			fmt.Println("exitHook of 'prompt' called")
 		},
 	}
+
 	currentstate *State = &start
 
 	transitions = []transition{
@@ -94,7 +104,6 @@ var (
 			from: &loggedoff, to: &loggedin,
 			conditions: []condition{
 				func(from *State, to *State) bool {
-					re := regexp.MustCompile(username + `@.*:~\$`)
 					switch {
 					case strings.Index(string(from.received), "\nPassword:") != -1:
 						from.received = []byte{}
@@ -113,11 +122,29 @@ var (
 							len:     uint32(len(cmd)),
 							payload: []byte(cmd),
 						}
-					case re.Match(currentstate.received):
+					case strings.Index(string(from.received), "\nLast login: ") != -1 &&
+						strings.Index(string(from.sent), password) != -1:
 						return true
 					}
 
 					return false
+				},
+			},
+		},
+		transition{
+			from: &loggedin, to: &prompt,
+			conditions: []condition{
+				func(from *State, to *State) bool {
+					userprompt := regexp.MustCompile(username + `@.*:~\$ `)
+					rootprompt := regexp.MustCompile(`root@.*:~\# `)
+					switch {
+					case rootprompt.Match(currentstate.received):
+						return true
+					case userprompt.Match(currentstate.received):
+						return true
+					default:
+						return false
+					}
 				},
 			},
 		},
