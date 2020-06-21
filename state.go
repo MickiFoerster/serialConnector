@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -26,6 +27,13 @@ type transition struct {
 }
 
 var (
+	commands = []string{
+		"hostname",
+		"id",
+		"ip a s",
+		"ls -l /etc",
+	}
+
 	start = State{
 		name: "undefined",
 		enterHook: func() {
@@ -57,20 +65,29 @@ var (
 		name: "prompt",
 		enterHook: func() {
 			fmt.Println("enterHook of 'prompt' called")
-			cmd := `hostname
-            id
-            sudo apt update 
-            sudo apt upgrade -y 
-            exit
-            `
-			writerinput <- udsMessage{
-				typ:     udsmsg_host2serial,
-				len:     uint32(len(cmd)),
-				payload: []byte(cmd),
-			}
 		},
 		exitHook: func() {
 			fmt.Println("exitHook of 'prompt' called")
+		},
+	}
+	busy = State{
+		name: "busy",
+		enterHook: func() {
+			fmt.Println("enterHook of 'busy' called")
+		},
+		exitHook: func() {
+			fmt.Println("exitHook of 'busy' called")
+		},
+	}
+	exit = State{
+		name: "exit",
+		enterHook: func() {
+			fmt.Println("enterHook of 'exit' called")
+			time.Sleep(time.Second)
+			os.Exit(0)
+		},
+		exitHook: func() {
+			fmt.Println("exitHook of 'exit' called")
 		},
 	}
 
@@ -113,6 +130,8 @@ var (
 							len:     uint32(len(cmd)),
 							payload: []byte(cmd),
 						}
+					case strings.Index(string(from.received), "\nLogin incorrect\n") != -1:
+						fallthrough
 					case strings.Index(string(from.received), " login: ") != -1 &&
 						strings.Index(string(from.sent), password) == -1:
 						from.received = []byte{}
@@ -148,6 +167,61 @@ var (
 				},
 			},
 		},
+		transition{
+			from: &prompt, to: &exit,
+			conditions: []condition{
+				func(from *State, to *State) bool {
+					if len(commands) == 0 {
+						cmd := "exit\n"
+						writerinput <- udsMessage{
+							typ:     udsmsg_host2serial,
+							len:     uint32(len(cmd)),
+							payload: []byte(cmd),
+						}
+						return true
+					}
+					return false
+				},
+			},
+		},
+		transition{
+			from: &prompt, to: &busy,
+			conditions: []condition{
+				func(from *State, to *State) bool {
+					if len(commands) > 0 {
+						cmd := commands[0]
+						if cmd[len(cmd)-1] != '\n' {
+							cmd += "\n"
+						}
+						commands = commands[1:]
+						writerinput <- udsMessage{
+							typ:     udsmsg_host2serial,
+							len:     uint32(len(cmd)),
+							payload: []byte(cmd),
+						}
+						return true
+					}
+					return false
+				},
+			},
+		},
+		transition{
+			from: &busy, to: &prompt,
+			conditions: []condition{
+				func(from *State, to *State) bool {
+					userprompt := regexp.MustCompile(username + `@.*:~\$ `)
+					rootprompt := regexp.MustCompile(`root@.*:~\# `)
+					switch {
+					case rootprompt.Match(currentstate.received):
+						return true
+					case userprompt.Match(currentstate.received):
+						return true
+					default:
+						return false
+					}
+				},
+			},
+		},
 	}
 )
 
@@ -156,7 +230,7 @@ func start_statemachine() {
 
 	go func() {
 		for {
-			time.Sleep(1 * time.Second)
+			time.Sleep(100 * time.Millisecond)
 			// go through all transitions and test if current node fits and when so if one condition is true
 			for _, t := range transitions {
 				// if current node is the origin node in the transition we are looking at in this iteration
