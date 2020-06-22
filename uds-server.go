@@ -43,8 +43,6 @@ var (
 )
 
 func init() {
-	os.Remove(uds_file_path)
-	start_statemachine()
 }
 
 func main() {
@@ -89,6 +87,8 @@ func main() {
 		log.Fatalf("error: client build/execution failed: %v\n", err)
 	}
 
+	statemachine_done := statemachine()
+
 	alldone := make(chan struct{})
 	go func() {
 		for {
@@ -96,17 +96,21 @@ func main() {
 			case <-terminate_signal:
 				log.Println("send server to stop ...")
 				server_done <- struct{}{}
+				statemachine_done <- struct{}{}
 			case <-server_done:
 				log.Println("server shutdown is complete")
 				alldone <- struct{}{}
 			case <-client_done:
 				log.Println("client shutdown is complete")
 				alldone <- struct{}{}
+			case <-statemachine_done:
+				log.Println("state machine is done")
+				alldone <- struct{}{}
 			}
 		}
 	}()
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 3; i++ {
 		<-alldone
 	}
 	log.Println("terminating main")

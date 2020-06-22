@@ -14,6 +14,7 @@ import (
 func server(client_sync chan struct{}) (chan struct{}, error) {
 	server_done := make(chan struct{})
 
+	os.Remove(uds_file_path)
 	l, err := net.Listen("unix", uds_file_path)
 	if err != nil {
 		return nil, fmt.Errorf("error: could not create passive socket: %v\n", err)

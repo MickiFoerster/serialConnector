@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -27,11 +26,17 @@ type transition struct {
 }
 
 var (
+	done = make(chan struct{})
+
 	commands = []string{
-		"hostname",
-		"id",
-		"ip a s",
-		"ls -l /etc",
+		"cat <<EOF > /tmp/asdf",
+		`\
+#!/bin/bash
+hostname && echo OK
+`,
+		"EOF",
+		"chmod 755 /tmp/asdf;",
+		"/tmp/asdf;",
 	}
 
 	start = State{
@@ -83,8 +88,7 @@ var (
 		name: "exit",
 		enterHook: func() {
 			fmt.Println("enterHook of 'exit' called")
-			time.Sleep(time.Second)
-			os.Exit(0)
+			done <- struct{}{}
 		},
 		exitHook: func() {
 			fmt.Println("exitHook of 'exit' called")
@@ -118,6 +122,30 @@ var (
 			},
 		},
 		transition{
+			from: &loggedoff, to: &loggedoff,
+			conditions: []condition{
+				func(from *State, to *State) bool {
+					switch {
+					case strings.Index(string(from.received), "\nPassword:") != -1 &&
+						strings.Index(string(from.sent), username) == -1:
+						cmd := "\n"
+						writerinput <- udsMessage{
+							typ:     udsmsg_host2serial,
+							len:     uint32(len(cmd)),
+							payload: []byte(cmd),
+						}
+						return true
+					case strings.Index(string(from.received), "\nLogin timed out") != -1:
+						fallthrough
+					case strings.Index(string(from.received), "\nLogin incorrect") != -1:
+						return true
+					}
+
+					return false
+				},
+			},
+		},
+		transition{
 			from: &loggedoff, to: &loggedin,
 			conditions: []condition{
 				func(from *State, to *State) bool {
@@ -130,8 +158,6 @@ var (
 							len:     uint32(len(cmd)),
 							payload: []byte(cmd),
 						}
-					case strings.Index(string(from.received), "\nLogin incorrect\n") != -1:
-						fallthrough
 					case strings.Index(string(from.received), " login: ") != -1 &&
 						strings.Index(string(from.sent), password) == -1:
 						from.received = []byte{}
@@ -225,42 +251,66 @@ var (
 	}
 )
 
-func start_statemachine() {
+func statemachine() chan struct{} {
 	start.entranceTime = time.Now()
 
 	go func() {
+	loop:
 		for {
-			time.Sleep(100 * time.Millisecond)
-			// go through all transitions and test if current node fits and when so if one condition is true
-			for _, t := range transitions {
-				// if current node is the origin node in the transition we are looking at in this iteration
-				if t.from == currentstate {
-					// check that all conditions are true otherwise transition must not be done
-					condition_true := true
-					for _, cond := range t.conditions {
-						condition_true = condition_true && cond(t.from, t.to)
-						if !condition_true {
-							break
-						}
+			select {
+			case <-done:
+				log.Println("statemachine received signal to terminate execution")
+				break loop
+			case <-time.After(time.Second):
+				valid, newState := checkTransitions()
+				if valid {
+					if currentstate.exitHook != nil {
+						currentstate.exitHook()
 					}
-					if condition_true {
-						if currentstate.exitHook != nil {
-							currentstate.exitHook()
-						}
-						sent := currentstate.sent
-						received := currentstate.received
-						currentstate = t.to
-						currentstate.sent = sent
-						currentstate.received = received
-						if currentstate.enterHook != nil {
-							currentstate.enterHook()
-						}
-						log.Println("Found new next state: ", currentstate.name)
+					//sent := currentstate.sent
+					//received := currentstate.received
+					currentstate = newState
+					currentstate.sent = []byte{}
+					currentstate.received = []byte{}
+					currentstate.entranceTime = time.Now()
+					if currentstate.enterHook != nil {
+						currentstate.enterHook()
 					}
+					log.Println("Found new next state: ", currentstate.name)
 				}
 			}
 		}
+		done <- struct{}{}
 	}()
+
+	return done
+}
+
+// checkTransitions() go through all transitions and test if current node fits
+// and returns new state if transision is valid
+func checkTransitions() (bool, *State) {
+	for _, t := range transitions {
+		// if current node is the origin node in the transition we are looking at in this iteration
+		if t.from == currentstate {
+			// check that all conditions are true otherwise transition must not be done
+			condition_true := true
+			for _, cond := range t.conditions {
+				condition_true = condition_true && cond(t.from, t.to)
+				if !condition_true {
+					break
+				}
+			}
+			if condition_true {
+				return true, t.to
+			} else {
+				log.Printf("Transition from %v to %v is not valid\n",
+					t.from.name, t.to.name)
+				fmt.Printf("DEBUG:sent: %s\n", t.from.sent)
+				fmt.Printf("DEBUG:received: %s\n", t.from.received)
+			}
+		}
+	}
+	return false, nil
 }
 
 func updateCurrentStateRecv(msg udsMessage) {
