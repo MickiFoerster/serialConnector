@@ -5,6 +5,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -12,7 +13,9 @@ type State struct {
 	name         string
 	entranceTime time.Time
 	sent         []byte
+	sentMtx      sync.Mutex
 	received     []byte
+	receivedMtx  sync.Mutex
 	enterHook    func()
 	exitHook     func()
 }
@@ -314,12 +317,13 @@ func checkTransitions() (bool, *State) {
 }
 
 func updateCurrentStateRecv(msg udsMessage) {
-	//log.Println("updateCurrentStateRecv called")
+	currentstate.receivedMtx.Lock()
+	defer currentstate.receivedMtx.Unlock()
 	currentstate.received = append(currentstate.received, msg.payload...)
-
 }
 
 func updateCurrentStateSent(msg udsMessage) {
-	//log.Println("updateCurrentStateSent called")
+	currentstate.sentMtx.Lock()
+	defer currentstate.sentMtx.Unlock()
 	currentstate.sent = append(currentstate.sent, msg.payload...)
 }
