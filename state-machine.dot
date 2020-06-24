@@ -1,0 +1,14 @@
+digraph {
+  undefined -> loggedoff             [ label="recv('login:')" ];
+  loggedoff -> usernamesent          [ label="send(username)" ];
+  usernamesent -> awaitingPassword   [ label="recv('Password:')" ];
+  awaitingPassword -> passwordsent   [ label="send(password)" ];
+  passwordsent -> loginfailed        [ label="recv('Login failed')" ];
+  passwordsent -> loggedin           [ label="recv('Last login')" ];
+  
+  undefined -> error               [ label="timeout" ];
+  usernamesent -> error            [ label="timeout" ];
+  passwordsent -> error            [ label="timeout" ];
+  
+  error -> undefined            [ label="send('\\n')" ];
+}
