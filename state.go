@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"time"
 )
@@ -72,34 +71,17 @@ func checkTransitions() (bool, *State) {
 		// if current node is the origin node in the transition we are looking at in this iteration
 		if t.from == currentstate {
 			// check that all conditions are true otherwise transition must not be done
-			condition_true := true
-			for _, cond := range t.conditions {
-				condition_true = condition_true && cond(t.from, t.to)
-				if !condition_true {
-					break
-				}
-			}
-			if condition_true {
+			if t.cond(t.from, t.to) {
 				return true, t.to
 			} else {
 				log.Printf("Transition from %v to %v is not valid\n",
 					t.from.name, t.to.name)
-				fmt.Printf("DEBUG:sent: %s\n", t.from.sent)
-				fmt.Printf("DEBUG:received: %s\n", t.from.received)
 			}
 		}
 	}
 	return false, nil
 }
 
-func updateCurrentStateRecv(msg udsMessage) {
-	currentstate.receivedMtx.Lock()
-	defer currentstate.receivedMtx.Unlock()
-	currentstate.received = append(currentstate.received, msg.payload...)
-}
+func updateCurrentStateRecv(msg udsMessage) {}
 
-func updateCurrentStateSent(msg udsMessage) {
-	currentstate.sentMtx.Lock()
-	defer currentstate.sentMtx.Unlock()
-	currentstate.sent = append(currentstate.sent, msg.payload...)
-}
+func updateCurrentStateSent(msg udsMessage) {}
